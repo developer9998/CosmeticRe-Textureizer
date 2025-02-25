@@ -2,15 +2,10 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.Http.Headers;
 using System.Reflection;
-using System.Threading.Tasks;
 using BepInEx;
-using GorillaNetworking;
 using HarmonyLib;
-using OVR.OpenVR;
 using UnityEngine;
-using Utilla;
 
 namespace CosmeticRe_Textureizer
 {
@@ -19,8 +14,10 @@ namespace CosmeticRe_Textureizer
 	{
 		public static Dictionary<string, Texture> TextureList = new Dictionary<string, Texture>();
         static List<GameObject> ReTexturedGameObjects = new List<GameObject>();
-		string CurrentPath, TexturePath ,DumpPath;
-        bool ran;
+        static List<GameObject[]> ThingsToSearch = new List<GameObject[]>();
+		static string CurrentPath, TexturePath ,DumpPath;
+        Action asyncTextureFind;
+        static Action asyncApplyTextures;
 		Plugin()
 		{
 			new Harmony(PluginInfo.GUID).PatchAll(Assembly.GetExecutingAssembly());
@@ -29,16 +26,23 @@ namespace CosmeticRe_Textureizer
             DumpPath = Path.Combine(CurrentPath, "DUMP");
         }
 
-		void Start()
+        void Start()
 		{
             if (!Directory.Exists(TexturePath))
             {
                 Directory.CreateDirectory(TexturePath);
             }
+            asyncTextureFind += GetTextures;
+            asyncApplyTextures += FindTexturesToApply;
+            ThreadingHelper.Instance.StartAsyncInvoke(delegate { return asyncTextureFind; });
+            CosmeticsV2Spawner_Dirty.OnPostInstantiateAllPrefabs2 += Run;
+        }
+        async void GetTextures()
+        {
             foreach (var texture in Directory.GetFiles(TexturePath))
-			{
+            {
                 Texture2D tex = new Texture2D(2, 2);
-                var imgdata = File.ReadAllBytes(texture);
+                var imgdata = await File.ReadAllBytesAsync(texture);
                 tex.LoadImage(imgdata);
                 string name = Path.GetFileNameWithoutExtension(texture);
                 tex.name = name;
@@ -50,56 +54,41 @@ namespace CosmeticRe_Textureizer
             }
         }
 
-        void LateUpdate()
+        static void Run()
         {
-            if (CosmeticsController.instance.allCosmeticsDict_isInitialized && !ran)
+            ThingsToSearch.Add(GorillaTagger.Instance.offlineVRRig.cosmetics);
+            ThingsToSearch.Add(GorillaTagger.Instance.offlineVRRig.cosmetics);
+            ThingsToSearch.Add(GorillaTagger.Instance.offlineVRRig.overrideCosmetics);
+            foreach (RigContainer rigC in VRRigCache.freeRigs)
             {
-                FindTexturesToApply(GorillaTagger.Instance.offlineVRRig.cosmetics);
-                FindTexturesToApply(GorillaTagger.Instance.offlineVRRig.overrideCosmetics);
-                foreach (RigContainer rigC in VRRigCache.freeRigs)
-                {
-                    FindTexturesToApply(rigC.Rig.cosmetics);
-                }
-                ran = true;
+                ThingsToSearch.Add(rigC.Rig.cosmetics);
             }
+            ThreadingHelper.Instance.StartAsyncInvoke(delegate { return asyncApplyTextures; });
         }
-        void FindTexturesToApply(GameObject[] cos)
+        static void FindTexturesToApply()
         {
-            foreach (GameObject cosG in cos)
+            foreach (GameObject[] things in ThingsToSearch)
             {
-                if (TextureList.ContainsKey(cosG.name))
+                foreach (GameObject cosG in things)
                 {
-                    if (cosG.GetComponent<Renderer>() != null)
+                    if (TextureList.ContainsKey(cosG.name))
                     {
-                        cosG.GetComponent<Renderer>().material.EnableKeyword("_USE_TEXTURE");
-                        cosG.GetComponent<Renderer>().material.DisableKeyword("_USE_TEX_ARRAY_ATLAS");
-                        cosG.GetComponent<Renderer>().material.mainTexture = TextureList[cosG.name];
+                        if (cosG.GetComponent<Renderer>() != null)
+                        {
+                            cosG.GetComponent<Renderer>().material.EnableKeyword("_USE_TEXTURE");
+                            cosG.GetComponent<Renderer>().material.DisableKeyword("_USE_TEX_ARRAY_ATLAS");
+                            cosG.GetComponent<Renderer>().material.mainTexture = TextureList[cosG.name];
+                        }
+                        foreach (var r in cosG.GetComponentsInChildren<Renderer>())
+                        {
+                            r.material.EnableKeyword("_USE_TEXTURE");
+                            r.material.DisableKeyword("_USE_TEX_ARRAY_ATLAS");
+                            r.material.mainTexture = TextureList[cosG.name];
+                        }
+                        ReTexturedGameObjects.Add(cosG);
                     }
-                    foreach (var r in cosG.GetComponentsInChildren<Renderer>())
-                    {
-                        r.material.EnableKeyword("_USE_TEXTURE");
-                        r.material.DisableKeyword("_USE_TEX_ARRAY_ATLAS");
-                        r.material.mainTexture = TextureList[cosG.name];
-                    }
-                    ReTexturedGameObjects.Add(cosG);
                 }
             }
-        }
-        void ApplyTetxure(GameObject g, Texture t)
-        {
-            if (g.GetComponent<Renderer>() != null)
-            {
-                g.GetComponent<Renderer>().material.EnableKeyword("_USE_TEXTURE");
-                g.GetComponent<Renderer>().material.DisableKeyword("_USE_TEX_ARRAY_ATLAS");
-                g.GetComponent<Renderer>().material.mainTexture = t;
-            }
-            foreach (var rend in g.GetComponentsInChildren<Renderer>())
-            {
-                g.GetComponent<Renderer>().material.EnableKeyword("_USE_TEXTURE");
-                g.GetComponent<Renderer>().material.DisableKeyword("_USE_TEX_ARRAY_ATLAS");
-                g.GetComponent<Renderer>().material.mainTexture = t;
-            }
-            ReTexturedGameObjects.Add(g);
         }
 	}
 }
