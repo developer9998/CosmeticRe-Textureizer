@@ -9,25 +9,24 @@ using UnityEngine;
 
 namespace CosmeticRe_Textureizer
 {
-	[BepInPlugin(PluginInfo.GUID, PluginInfo.Name, PluginInfo.Version)]
-	public class Plugin : BaseUnityPlugin
-	{
-		public static Dictionary<string, Texture> TextureList = new Dictionary<string, Texture>();
+    [BepInPlugin(PluginInfo.GUID, PluginInfo.Name, PluginInfo.Version)]
+    public class Plugin : BaseUnityPlugin
+    {
+        public static Dictionary<string, Texture> TextureList = new Dictionary<string, Texture>();
         static List<GameObject> ReTexturedGameObjects = new List<GameObject>();
         static List<GameObject[]> ThingsToSearch = new List<GameObject[]>();
-		static string CurrentPath, TexturePath ,DumpPath;
+        static string CurrentPath, TexturePath;
         Action asyncTextureFind;
         static Action asyncApplyTextures;
-		Plugin()
-		{
-			new Harmony(PluginInfo.GUID).PatchAll(Assembly.GetExecutingAssembly());
-			CurrentPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-			TexturePath = Path.Combine(CurrentPath, "CosmeticTetxures");
-            DumpPath = Path.Combine(CurrentPath, "DUMP");
+        Plugin()
+        {
+            new Harmony(PluginInfo.GUID).PatchAll(Assembly.GetExecutingAssembly());
+            CurrentPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            TexturePath = Path.Combine(CurrentPath, "CosmeticTetxures");
         }
 
         void Start()
-		{
+        {
             if (!Directory.Exists(TexturePath))
             {
                 Directory.CreateDirectory(TexturePath);
@@ -90,5 +89,5 @@ namespace CosmeticRe_Textureizer
                 }
             }
         }
-	}
+    }
 }
