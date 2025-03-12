@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using BepInEx;
 using HarmonyLib;
 using UnityEngine;
@@ -17,7 +19,6 @@ namespace CosmeticRe_Textureizer
         static List<GameObject[]> ThingsToSearch = new List<GameObject[]>();
         static string CurrentPath, TexturePath;
         Action asyncTextureFind;
-        static Action asyncApplyTextures;
         Plugin()
         {
             new Harmony(PluginInfo.GUID).PatchAll(Assembly.GetExecutingAssembly());
@@ -32,16 +33,15 @@ namespace CosmeticRe_Textureizer
                 Directory.CreateDirectory(TexturePath);
             }
             asyncTextureFind += GetTextures;
-            asyncApplyTextures += FindTexturesToApply;
-            ThreadingHelper.Instance.StartAsyncInvoke(delegate { return asyncTextureFind; });
+            ThreadingHelper.Instance.StartAsyncInvoke(()=>asyncTextureFind);
             CosmeticsV2Spawner_Dirty.OnPostInstantiateAllPrefabs2 += Run;
         }
-        async void GetTextures()
+        void GetTextures()
         {
             foreach (var texture in Directory.GetFiles(TexturePath))
             {
                 Texture2D tex = new Texture2D(2, 2);
-                var imgdata = await File.ReadAllBytesAsync(texture);
+                var imgdata = File.ReadAllBytes(texture);
                 tex.LoadImage(imgdata);
                 string name = Path.GetFileNameWithoutExtension(texture);
                 tex.name = name;
@@ -53,18 +53,18 @@ namespace CosmeticRe_Textureizer
             }
         }
 
-        static void Run()
+        void Run()
         {
             ThingsToSearch.Add(GorillaTagger.Instance.offlineVRRig.cosmetics);
-            ThingsToSearch.Add(GorillaTagger.Instance.offlineVRRig.cosmetics);
             ThingsToSearch.Add(GorillaTagger.Instance.offlineVRRig.overrideCosmetics);
-            foreach (RigContainer rigC in VRRigCache.freeRigs)
+            foreach (RigContainer rigC in Resources.FindObjectsOfTypeAll<RigContainer>())
             {
                 ThingsToSearch.Add(rigC.Rig.cosmetics);
             }
-            ThreadingHelper.Instance.StartAsyncInvoke(delegate { return asyncApplyTextures; });
+            StartCoroutine(FindTexturesToApply());
         }
-        static void FindTexturesToApply()
+
+        static IEnumerator FindTexturesToApply()
         {
             foreach (GameObject[] things in ThingsToSearch)
             {
@@ -88,6 +88,7 @@ namespace CosmeticRe_Textureizer
                     }
                 }
             }
+            yield return "WAWA";
         }
     }
 }
